@@ -11,14 +11,14 @@ var AJAXo = new function() {
 
     this.addAPage = function(page) {
         if(page.hasOwnProperty("load") &&
-            page.hasOwnProperty("name")) {
+           page.hasOwnProperty("name")) {
             this.pages.push(page);
         }
         else
             console.log("AJAXo : Trying to add an invalid page.");
     };
 
-    this.startAjaxHandling = function(parsedFromUrlTitle) {
+    this.startAjaxHandling = function() {
         // Try to load the page from the "page" url attribute
         $(window).on('statechange', function() {
             var State = History.getState();
@@ -35,41 +35,14 @@ var AJAXo = new function() {
         // Check if the URL contains a page tag and load the right page on arrival
         var pageToLoad = URLParser.parse(window.location);
         if(pageToLoad != null) {
-            AJAXo.changePage(pageToLoad.page, pageToLoad, parsedFromUrlTitle, true);
+            AJAXo.changePage(pageToLoad.page, pageToLoad, true);
             return true;
         }
         return false;
     };
 
-    this.addToQueue = function(page, params)
-    { this.queue.push([page, params]) };
-
-    this.launchFollowingPage = function() {
-        var nextPage = this.queue.shift();
-        if(typeof nextPage != "undefined")
-            this.loadPage(nextPage[0], nextPage[1]);
-        else
-            $(document).trigger("ajaxhandler.load.finished.specialHandle");
-    };
-
-    this.synchronize = function (page, what) {
-        // The word "used" is concatenated with "what" while it's first letter is converted to uppercase
-        var usedNameGenerated = "used" + what[0].toUpperCase() + what.slice(1);
-        if (page.hasOwnProperty(what))
-            this[usedNameGenerated] = page[what];
-        else
-            this[usedNameGenerated] = this[what];
-    };
-
-    this.syncPageWithHandler = function(page) {
-        this.synchronize(page, "container");
-        this.synchronize(page, "globalContainer");
-        this.synchronize(page, "loader");
-    };
-
-    this.changePage = function(newPage, params, title, isFromParsing) {
+    this.changePage = function(newPage, params, isFromParsing) {
         params = params || {};
-        title = title || "";
         isFromParsing = isFromParsing || false;
 
         params.page = newPage;
@@ -87,29 +60,6 @@ var AJAXo = new function() {
             History.replaceState(params, "", "?" + url);
         else
             History.pushState(params, "", "?" + url);
-
-        if(title !== "")
-            document.title = title;
-    };
-
-    this.loadPage = function(page, params) {
-        var beforeLoad = null;
-
-        if(typeof params == "undefined")
-            params = {};
-        if(page.hasOwnProperty("beforeLoad"))
-            beforeLoad = page.beforeLoad;
-
-        if(this.pageIsLoading)
-            this.addToQueue(page, params);
-        else {
-            this.syncPageWithHandler(page);
-            this.pageIsLoading = true;
-
-            this.loadAjaxPageWithLoader(page, params, function (html) {
-                page.load(params, html);
-            }, beforeLoad);
-        }
     };
 
     this.loadPageComponent = function(comp, params) {
@@ -129,14 +79,74 @@ var AJAXo = new function() {
         return false;
     };
 
-    this.loadPageByName = function(name, params) {
+    this.reloadPage = function() {
+        var currentState = History.getState();
+        // Chrome fix : Chrome will not reload the exact same url (clever but nor wanted),
+        //              adding a random number do the trick.
+        currentState.data.randomData = window.Math.random();
+
+        var url = $.param(currentState.data).replace("&randomData=" + currentState.data.randomData, "");
+        History.replaceState(currentState.data, "", "?" + url);
+    };
+
+    // private
+
+    var addToQueue = function(page, params)
+    { this.queue.push([page, params]) };
+
+    var launchFollowingPage = function() {
+        var nextPage = this.queue.shift();
+        if(typeof nextPage != "undefined")
+            this.loadPage(nextPage[0], nextPage[1]);
+        else
+            $(document).trigger("ajaxhandler.load.finished.specialHandle");
+    };
+
+    var synchronize = function (page, what) {
+        // The word "used" is concatenated with "what" while it's first letter is converted to uppercase
+        var usedNameGenerated = "used" + what[0].toUpperCase() + what.slice(1);
+        if (page.hasOwnProperty(what))
+            this[usedNameGenerated] = page[what];
+        else
+            this[usedNameGenerated] = this[what];
+    };
+
+    var syncPageWithAJAXo = function(page) {
+        this.synchronize(page, "container");
+        this.synchronize(page, "globalContainer");
+        this.synchronize(page, "loader");
+    };
+
+    var loadPage = function(page, params) {
+        var beforeLoad = null;
+
+        if(typeof params == "undefined")
+            params = {};
+        if(page.hasOwnProperty("beforeLoad"))
+            beforeLoad = page.beforeLoad;
+        if(page.hasOwnProperty("title"))
+            document.title = page.title;
+
+        if(this.pageIsLoading)
+            this.addToQueue(page, params);
+        else {
+            this.syncPageWithAJAXo(page);
+            this.pageIsLoading = true;
+
+            this.loadAjaxPageWithLoader(page, params, function (html) {
+                page.load(params, html);
+            }, beforeLoad);
+        }
+    };
+
+    var loadPageByName = function(name, params) {
         for(var i = 0; i<this.pages.length; i++)
             if(this.pages[i].name == name)
                 return this.loadPage(this.pages[i], params);
         return false;
     };
 
-    this.loadAjaxPage = function(name, params, doneOnSuccess, doneOnError) {
+    var loadAjaxPage = function(name, params, doneOnSuccess, doneOnError) {
         doneOnSuccess = doneOnSuccess || function(){};
         doneOnError = doneOnError || function(){};
         params = params || "";
@@ -163,7 +173,7 @@ var AJAXo = new function() {
         });
     };
 
-    this.loadAjaxPageWithLoader = function(page, params, doneOnSuccess, doneBeforeAdd, doneOnError) {
+    var loadAjaxPageWithLoader = function(page, params, doneOnSuccess, doneBeforeAdd, doneOnError) {
         doneBeforeAdd = doneBeforeAdd || function(){ return true; };
 
         var onSpecial = false;
@@ -188,7 +198,7 @@ var AJAXo = new function() {
 
                             $(document).on("ajaxhandler.load.finished.specialHandle", function() {
                                 $(document).off("ajaxhandler.load.finished.specialHandle");
-                                AJAXo.syncPageWithHandler(page);
+                                AJAXo.syncPageWithAJAXo(page);
 
                                 $(AJAXo.usedLoader).fadeOut("fast", function () {
                                     $(AJAXo.usedContainer).fadeIn("fast");
@@ -221,16 +231,6 @@ var AJAXo = new function() {
                 }, doneOnError);
             });
         });
-    };
-
-    this.reloadPage = function() {
-        var currentState = History.getState();
-        // Chrome fix : Chrome will not reload the exact same url (clever but nor wanted),
-        //              adding a random number do the trick.
-        currentState.data.randomData = window.Math.random();
-
-        var url = $.param(currentState.data).replace("&randomData=" + currentState.data.randomData, "");
-        History.replaceState(currentState.data, "", "?" + url);
     };
 };
 
