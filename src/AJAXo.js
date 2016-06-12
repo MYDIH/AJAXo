@@ -1,18 +1,27 @@
 var AJAXo = new function() {
-    this.pages = [];
-    this.usedContainer = null;
-    this.usedGlobalContainer = null;
-    this.usedLoader = null;
-    this.container = "#PageContainer";
-    this.globalContainer = "#PageGlobalContainer";
-    this.loader = "#LoaderContainer";
-    this.queue = [];
-    this.pageIsLoading = false;
+    var pages = [];
+    var usedContainer = null;
+    var usedGlobalContainer = null;
+    var usedLoader = null;
+    var container = "#PageContainer";
+    var globalContainer = "#PageGlobalContainer";
+    var loader = "#LoaderContainer";
+    var pageIsLoading = false;
+    var queue = [];
+
+    this.initialize = function(newParameters)  {
+        if(newParameters.hasOwnProperty("container"))
+            container = newParameters.container;
+        if(newParameters.hasOwnProperty("globalContainer"))
+            globalContainer = newParameters.globalContainer;
+        if(newParameters.hasOwnProperty("loader"))
+            loader = newParameters.loader;
+    };
 
     this.addAPage = function(page) {
         if(page.hasOwnProperty("load") &&
            page.hasOwnProperty("name")) {
-            this.pages.push(page);
+            pages.push(page);
         }
         else
             console.log("AJAXo : Trying to add an invalid page.");
@@ -26,9 +35,9 @@ var AJAXo = new function() {
         });
 
         // Launch the next page in the queu when a page finished to load
-        $(document).on("ajaxhandler.load.finished.normalHandle", function () {
-            AJAXo.pageIsLoading = false;
-            AJAXo.launchFollowingPage();
+        $(document).on("ajaxo.load.finished.normalHandle", function () {
+            pageIsLoading = false;
+            launchFollowingPage();
             return false;
         });
 
@@ -63,7 +72,7 @@ var AJAXo = new function() {
     };
 
     this.loadPageComponent = function(comp, params) {
-        return this.loadPage(comp, params);
+        return loadPage(comp, params);
     };
 
     this.loadPageComponentById = function(page, id, params) {
@@ -71,11 +80,11 @@ var AJAXo = new function() {
     };
 
     this.loadPageComponentByName = function(pageName, compName, params) {
-        for(var i = 0; i<this.pages.length; i++)
-            if(this.pages[i].name == pageName)
-                for(var j = 0; j<this.pages[i].components.length; j++)
-                    if(this.pages[i].components[j].name == compName)
-                        return this.loadPageComponent(this.pages[i].components[j], params);
+        for(var i = 0; i<pages.length; i++)
+            if(pages[i].name == pageName)
+                for(var j = 0; j<pages[i].components.length; j++)
+                    if(pages[i].components[j].name == compName)
+                        return this.loadPageComponent(pages[i].components[j], params);
         return false;
     };
 
@@ -92,29 +101,29 @@ var AJAXo = new function() {
     // private
 
     var addToQueue = function(page, params)
-    { this.queue.push([page, params]) };
+    { queue.push([page, params]) };
 
     var launchFollowingPage = function() {
-        var nextPage = this.queue.shift();
+        var nextPage = queue.shift();
         if(typeof nextPage != "undefined")
-            this.loadPage(nextPage[0], nextPage[1]);
+            loadPage(nextPage[0], nextPage[1]);
         else
-            $(document).trigger("ajaxhandler.load.finished.specialHandle");
-    };
-
-    var synchronize = function (page, what) {
-        // The word "used" is concatenated with "what" while it's first letter is converted to uppercase
-        var usedNameGenerated = "used" + what[0].toUpperCase() + what.slice(1);
-        if (page.hasOwnProperty(what))
-            this[usedNameGenerated] = page[what];
-        else
-            this[usedNameGenerated] = this[what];
+            $(document).trigger("ajaxo.load.finished.specialHandle");
     };
 
     var syncPageWithAJAXo = function(page) {
-        this.synchronize(page, "container");
-        this.synchronize(page, "globalContainer");
-        this.synchronize(page, "loader");
+        if(page.hasOwnProperty("container"))
+            usedContainer = page.container;
+        else
+            usedContainer = container;
+        if(page.hasOwnProperty("globalContainer"))
+            usedGlobalContainer = page.globalContainer;
+        else
+            usedGlobalContainer = globalContainer;
+        if(page.hasOwnProperty("loader"))
+            usedLoader = page.loader;
+        else
+            usedLoader = loader;
     };
 
     var loadPage = function(page, params) {
@@ -127,32 +136,32 @@ var AJAXo = new function() {
         if(page.hasOwnProperty("title"))
             document.title = page.title;
 
-        if(this.pageIsLoading)
-            this.addToQueue(page, params);
+        if(pageIsLoading)
+            addToQueue(page, params);
         else {
-            this.syncPageWithAJAXo(page);
-            this.pageIsLoading = true;
+            syncPageWithAJAXo(page);
+            pageIsLoading = true;
 
-            this.loadAjaxPageWithLoader(page, params, function (html) {
+            loadAjaxPageWithLoader(page, params, function (html) {
                 page.load(params, html);
             }, beforeLoad);
         }
     };
 
     var loadPageByName = function(name, params) {
-        for(var i = 0; i<this.pages.length; i++)
-            if(this.pages[i].name == name)
-                return this.loadPage(this.pages[i], params);
+        for(var i = 0; i<pages.length; i++)
+            if(pages[i].name == name)
+                return loadPage(pages[i], params);
         return false;
     };
 
-    var loadAjaxPage = function(name, params, doneOnSuccess, doneOnError) {
+    var loadAjaxPage = function(url, params, doneOnSuccess, doneOnError) {
         doneOnSuccess = doneOnSuccess || function(){};
         doneOnError = doneOnError || function(){};
         params = params || "";
 
         $.ajax({
-            url : 'pages/' + name + '.php',
+            url : url,
             type : 'POST',
             dataType : 'html',
             data : params,
@@ -178,9 +187,9 @@ var AJAXo = new function() {
 
         var onSpecial = false;
 
-        $(this.usedContainer).fadeOut("fast", function() {
+        $(usedContainer).fadeOut("fast", function() {
             $(AJAXo.usedLoader).fadeIn("fast", function() {
-                AJAXo.loadAjaxPage(page.name, $.param(params), function (html) {
+                loadAjaxPage(page.url, $.param(params), function (html) {
                     // Enabing the modification of the html element
                     var editableHtml = [ html ];
 
@@ -188,21 +197,20 @@ var AJAXo = new function() {
                         $(AJAXo.usedContainer).remove();
                         $(editableHtml[0]).appendTo($(AJAXo.usedGlobalContainer));
 
-                        if(typeof page.loadComponents !== 'undefined' && page.loadComponents.length > 0) {
+                        if(page.hasOwnProperty("loadComponents") && page.loadComponents.length > 0) {
+                            onSpecial = true;
 
                             for(var i = 0; i<page.loadComponents.length; i++) {
                                 AJAXo.loadPageComponentById(page, page.loadComponents[i], params);
                             }
 
-                            onSpecial = true;
-
-                            $(document).on("ajaxhandler.load.finished.specialHandle", function() {
-                                $(document).off("ajaxhandler.load.finished.specialHandle");
-                                AJAXo.syncPageWithAJAXo(page);
+                            $(document).on("ajaxo.load.finished.specialHandle", function() {
+                                $(document).off("ajaxo.load.finished.specialHandle");
+                                syncPageWithAJAXo(page);
 
                                 $(AJAXo.usedLoader).fadeOut("fast", function () {
                                     $(AJAXo.usedContainer).fadeIn("fast");
-                                    $(document).trigger("ajaxhandler.load.finished.normalHandle");
+                                    $(document).trigger("ajaxo.load.finished.normalHandle");
 
                                     doneOnSuccess(editableHtml[html]);
                                 });
@@ -211,7 +219,7 @@ var AJAXo = new function() {
                         else {
                             $(AJAXo.usedLoader).fadeOut("fast", function () {
                                 $(AJAXo.usedContainer).fadeIn("fast");
-                                $(document).trigger("ajaxhandler.load.finished.normalHandle");
+                                $(document).trigger("ajaxo.load.finished.normalHandle");
                             });
                         }
                     }
@@ -219,12 +227,12 @@ var AJAXo = new function() {
                         $(AJAXo.usedLoader).fadeOut("fast", function () {
                             $(AJAXo.usedContainer).fadeIn("fast");
 
-                            $(document).trigger("ajaxhandler.load.finished.normalHandle");
+                            $(document).trigger("ajaxo.load.finished.normalHandle");
                         });
                     }
 
                     if(onSpecial)
-                        $(document).trigger("ajaxhandler.load.finished.normalHandle");
+                        $(document).trigger("ajaxo.load.finished.normalHandle");
                     else
                         doneOnSuccess(editableHtml[html]);
 
