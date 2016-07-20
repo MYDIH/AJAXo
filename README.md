@@ -75,7 +75,7 @@ Then, you need to configure a page to use with the library :
 var Page = {
     this.name = "MyPage"; // This parameter is mandatory and is used to identify a page,
     this.serveurPage = "php/MyPage.php"; // This parameter is also mandatory and it needs to point to the
-                                         // serveur page you want to reach by AJAX
+                                         // server page you want to reach by AJAX
     
     this.load = function(params) {
         
